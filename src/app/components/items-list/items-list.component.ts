@@ -54,6 +54,6 @@ export class ItemsListComponent implements OnInit, OnDestroy {
   }
 
   onRemove($event: TableOutputElement<DummyItem>) {
-
+    this.itemsService.remove($event.elementIndex);
   }
 }

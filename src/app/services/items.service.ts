@@ -34,7 +34,8 @@ export class ItemsService {
 
   remove(index: number) {
     this.loadedItems = [
-      ...this.loadedItems.splice(index, 1)
+      ...this.loadedItems.slice(0, index),
+      ...this.loadedItems.slice(index + 1),
     ];
   }
 

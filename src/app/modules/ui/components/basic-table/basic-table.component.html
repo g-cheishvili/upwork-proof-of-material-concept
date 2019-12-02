@@ -59,10 +59,13 @@
     (matSortChange)="sortChanged($event)"
   >
     <ng-container matColumnDef="expandableCol">
-      <mat-header-cell *matHeaderCellDef><i class="fas fa-expand"></i></mat-header-cell>
+      <mat-header-cell *matHeaderCellDef>
+
+      </mat-header-cell>
       <mat-cell *matCellDef="let element">
-        <i class="fas"
-           [ngClass]="{'fa-chevron-up': multiExpanded ? expandedElements.has(getIdentifier(element)) : expandedElement === getIdentifier(element), 'fa-chevron-down': multiExpanded ? !expandedElements.has(getIdentifier(element)) : expandedElement !== getIdentifier(element)}"></i>
+        <mat-icon>
+          {{ expandIcon(element) }}
+        </mat-icon>
       </mat-cell>
       <mat-footer-cell *matFooterCellDef></mat-footer-cell>
     </ng-container>

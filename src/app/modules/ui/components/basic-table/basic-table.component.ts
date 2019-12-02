@@ -124,9 +124,12 @@ export class BasicTableComponent implements OnInit, AfterViewInit {
     ];
   }
 
-
-  private _tableIdentifier: string;
   visibleColumns: Set<string> = new Set();
+
+  expandIcon(element: any): string {
+    const itemExpanded = this.multiExpanded ? this.expandedElements.has(this.getIdentifier(element)) : this.expandedElement === this.getIdentifier(element);
+    return itemExpanded ? 'unfold_less' : 'unfold_more';
+  }
 
   constructor() {
   }
