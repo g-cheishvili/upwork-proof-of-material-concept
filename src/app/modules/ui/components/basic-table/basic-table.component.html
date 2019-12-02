@@ -1,0 +1,338 @@
+<ng-container
+  *ngIf="!data; else table"
+>
+  <div class="tablePlaceholder">
+    <div class="rowPlaceholder" *ngFor="let el of _ghostElements"></div>
+  </div>
+</ng-container>
+<ng-template #table>
+  <mat-menu #columnsSelector="matMenu">
+    <ng-container *ngFor="let column of allColumns">
+      <button mat-menu-item [disableRipple]="true">
+        <mat-checkbox
+          [checked]="visibleColumns.has(column)"
+          (change)="toggleColumnVisibility(column, $event)"
+          (click)="$event.stopPropagation()">
+          {{ (rowConfig[column] && rowConfig[column].label ? rowConfig[column].label : column) }}
+        </mat-checkbox>
+      </button>
+    </ng-container>
+  </mat-menu>
+
+
+  <div style="background-color: white" class="text-right">
+
+    <button
+      *ngIf="multiExpanded"
+      mat-button
+      color="primary"
+      (click)="toggleAllElementExpansion()"
+    >
+      <i class="fas fa-expand-arrows-alt"></i> {{ expandedElements.size > 0 ? 'Hide' : 'Show' }} all item
+    </button>
+    <button
+      *ngIf="editableColumns"
+      mat-button
+      color="primary"
+      [matMenuTriggerFor]="columnsSelector">
+      <i class="fas fa-columns"></i> Columns
+    </button>
+    <button
+      *ngIf="canAdd"
+      mat-button
+      color="primary"
+      (click)="add.emit()">
+      <mat-icon>add</mat-icon>
+      Create
+    </button>
+
+  </div>
+
+  <mat-table
+    class="mat-elevation-z0"
+    [dataSource]="data"
+    *ngIf="data?.length > 0; else noDataFound"
+    multiTemplateDataRows
+    matSort
+    [matSortActive]="sorted?.column"
+    [matSortDirection]="sorted?.direction"
+    (matSortChange)="sortChanged($event)"
+  >
+    <ng-container matColumnDef="expandableCol">
+      <mat-header-cell *matHeaderCellDef><i class="fas fa-expand"></i></mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        <i class="fas"
+           [ngClass]="{'fa-chevron-up': multiExpanded ? expandedElements.has(getIdentifier(element)) : expandedElement === getIdentifier(element), 'fa-chevron-down': multiExpanded ? !expandedElements.has(getIdentifier(element)) : expandedElement !== getIdentifier(element)}"></i>
+      </mat-cell>
+      <mat-footer-cell *matFooterCellDef></mat-footer-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="number">
+      <mat-header-cell *matHeaderCellDef>N</mat-header-cell>
+      <mat-cell *matCellDef="let i = dataIndex;">{{ i + 1 }}</mat-cell>
+      <mat-footer-cell *matFooterCellDef>N</mat-footer-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="selectable">
+      <mat-header-cell *matHeaderCellDef>
+        <i *ngIf="!multipleSelectable; else selectHeader" class="fas fa-tasks"></i>
+
+        <ng-template #selectHeader>
+          <mat-checkbox
+            (change)="toggleAllSelection($event)"
+            [indeterminate]="mSelected.size !== data?.length && mSelected.size > 0"
+            [checked]="mSelected.size === data?.length"
+          >
+          </mat-checkbox>
+        </ng-template>
+
+      </mat-header-cell>
+      <mat-cell *matCellDef="let element;">
+        <mat-checkbox
+          (change)="toggleSelection(element)"
+          [checked]="mSelected.has(getIdentifier(element))"
+        >
+        </mat-checkbox>
+      </mat-cell>
+      <mat-footer-cell *matFooterCellDef></mat-footer-cell>
+    </ng-container>
+
+    <ng-container *ngFor="let column of providedColumns" [matColumnDef]="column">
+      <mat-header-cell
+        *matHeaderCellDef
+        [mat-sort-header]="sortableColumns?.get(column)"
+        [disabled]="!sortableColumns?.has(column)">
+        {{ (rowConfig[column] && rowConfig[column].label ? rowConfig[column].label : column) }}
+      </mat-header-cell>
+      <mat-cell *matCellDef="let element; let i = dataIndex">
+        <ng-template [ngTemplateOutlet]="cellTemplate"
+                     [ngTemplateOutletContext]="{element: element, column: column, elementIndex: i, config: rowConfig}"></ng-template>
+      </mat-cell>
+      <mat-footer-cell *matFooterCellDef>
+        <ng-template [ngTemplateOutlet]="cellTemplate"
+                     [ngTemplateOutletContext]="{element: footerData, column: column, config: footerConfig}"></ng-template>
+      </mat-footer-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="actions">
+      <mat-header-cell *matHeaderCellDef>{{ 'Actions' }}</mat-header-cell>
+      <mat-cell *matCellDef="let element; let dataIndex = dataIndex" (click)="$event.stopPropagation();">
+        <ng-container *ngIf="!actionsMap.size; else actionsTemplate">
+          <button type="button" mat-icon-button color="primary" (click)="onEdit(element, dataIndex)"
+                  *ngIf="edit.observers.length > 0">
+            <mat-icon>create</mat-icon>
+          </button>
+          <button type="button" mat-icon-button color="warn" (click)="onRemove(element, dataIndex)"
+                  *ngIf="remove.observers.length > 0">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </ng-container>
+        <ng-template #actionsTemplate>
+          <button type="button" (click)="$event.stopPropagation()" [matMenuTriggerFor]="menu" class="btn btn-link">
+            <i class="fas fa-ellipsis-h" style="font-size: 1.3em;"></i>
+          </button>
+          <mat-menu #menu="matMenu">
+            <ng-container *ngFor="let button of getActionButtons(element)">
+              <ng-container *ngIf="button.routerLink; else notLink">
+                <a mat-menu-item [routerLink]="button.routerLink"
+                   [disabled]="button.disabled !== undefined && button.disabled">
+                  <i class="{{ button.iconClass }}"
+                     style="width: 20px;"></i> {{ button.text ? (button.text) : '' }}
+                </a>
+              </ng-container>
+              <ng-template #notLink>
+                <ng-container *ngIf="button.upload; else withActionFunction">
+                  <a class="upload-btn-wrapper" mat-menu-item
+                     [disabled]="button.disabled !== undefined && button.disabled">
+                    <i class="{{ button.iconClass }}" style="width: 20px;"></i>
+                    {{ button.text !== '' ? (button.text) : ' ' }}
+                    <input type="file" (change)="actionButtonClicked($event, button)"/>
+                  </a>
+                </ng-container>
+                <ng-template #withActionFunction>
+                  <a mat-menu-item (click)="actionButtonClicked($event, button)"
+                     [disabled]="button.disabled !== undefined && button.disabled">
+                    <i class="{{ button.iconClass }}" style="width: 20px;"></i>
+                    {{ button.text !== '' ? (button.text) : ' ' }}
+                  </a>
+                </ng-template>
+              </ng-template>
+            </ng-container>
+          </mat-menu>
+        </ng-template>
+        <ng-container *ngIf="actions.length > 0">
+          <button type="button" (click)="$event.stopPropagation()" [matMenuTriggerFor]="actionsMenu"
+                  class="btn btn-link">
+            <i class="fas fa-ellipsis-h" style="font-size: 1.3em;"></i>
+          </button>
+          <mat-menu #actionsMenu="matMenu">
+            <ng-container *ngFor="let button of actions">
+              <ng-container *ngIf="button.routerLink; else notLink">
+                <a mat-menu-item [routerLink]="button.routerLink"
+                   [disabled]="button.disabled !== undefined && button.disabled">
+                  <i class="{{ button.iconClass }}"
+                     style="width: 20px;"></i> {{ button.text ? (button.text) : '' }}
+                </a>
+              </ng-container>
+              <ng-template #notLink>
+                <ng-container *ngIf="button.upload; else withActionFunction">
+                  <a class="upload-btn-wrapper" mat-menu-item
+                     [disabled]="button.disabled !== undefined && button.disabled">
+                    <i class="{{ button.iconClass }}" style="width: 20px;"></i>
+                    {{ button.text !== '' ? (button.text) : ' ' }}
+                    <input type="file" (change)="actionButtonClicked($event, button, element)"/>
+                  </a>
+                </ng-container>
+                <ng-template #withActionFunction>
+                  <a mat-menu-item (click)="actionButtonClicked($event, button, element)"
+                     [disabled]="button.disabled !== undefined && button.disabled">
+                    <i class="{{ button.iconClass }}" style="width: 20px;"></i>
+                    {{ button.text !== '' ? (button.text) : ' ' }}
+                  </a>
+                </ng-template>
+              </ng-template>
+            </ng-container>
+          </mat-menu>
+        </ng-container>
+      </mat-cell>
+      <mat-footer-cell *matFooterCellDef>
+        <ng-container *ngIf="footerActions.length > 2; else showFooterActions">
+          <button type="button" (click)="$event.stopPropagation()" [matMenuTriggerFor]="actionsMenu"
+                  class="btn btn-link">
+            <i class="fas fa-ellipsis-h" style="font-size: 1.3em;"></i>
+          </button>
+          <mat-menu #actionsMenu="matMenu">
+            <ng-container *ngFor="let button of footerActions">
+              <ng-container *ngIf="button.routerLink; else notLink">
+                <a mat-menu-item [routerLink]="button.routerLink"
+                   [disabled]="button.disabled !== undefined && button.disabled">
+                  <i class="{{ button.iconClass }}"
+                     style="width: 20px;"></i> {{ button.text ? (button.text) : '' }}
+                </a>
+              </ng-container>
+              <ng-template #notLink>
+                <a mat-menu-item (click)="footerActionButtonClicked($event, button)"
+                   [disabled]="button.disabled !== undefined && button.disabled">
+                  <i class="{{ button.iconClass }}" style="width: 20px;"></i>
+                  {{ button.text !== '' ? (button.text) : ' ' }}
+                </a>
+              </ng-template>
+            </ng-container>
+          </mat-menu>
+        </ng-container>
+        <ng-template #showFooterActions>
+          <ng-container *ngFor="let button of footerActions">
+            <ng-container *ngIf="button.routerLink; else notLink">
+              <a [routerLink]="button.routerLink" class="cursor-pointer">
+                <i class="{{ button.iconClass }}"
+                   style="width: 20px;"></i> {{ button.text ? (button.text) : '' }}
+              </a>
+            </ng-container>
+            <ng-template #notLink>
+              <a (click)="footerActionButtonClicked($event, button)" class="cursor-pointer">
+                <i class="{{ button.iconClass }}" style="width: 20px;"></i>
+                {{ button.text !== '' ? (button.text) : '' }}
+              </a>
+            </ng-template>
+          </ng-container>
+        </ng-template>
+      </mat-footer-cell>
+    </ng-container>
+
+    <ng-template #basicExpanded></ng-template>
+
+    <ng-template [ngIf]="mExpandable">
+      <ng-container [matColumnDef]="'expandedDetail'">
+        <mat-cell *matCellDef="let element" [attr.colspan]="displayColumns.length">
+          <div class="element-detail"
+               *ngIf="(multiExpanded ? expandedElements.has(getIdentifier(element)) : getIdentifier(element) === expandedElement)"
+               [@detailExpand]>
+            <ng-template [ngTemplateOutlet]="expandedTemplate ? expandedTemplate : basicExpanded"
+                         [ngTemplateOutletContext]="{ element: element }"></ng-template>
+          </div>
+        </mat-cell>
+      </ng-container>
+    </ng-template>
+
+    <mat-header-row *matHeaderRowDef="displayColumns"></mat-header-row>
+    <mat-row
+      *matRowDef="let element; columns: displayColumns"
+      class="basic-table-element-row"
+      [class.element-row]="mExpandable || mSelectable"
+      [class.expanded-row]="expandedElement === element"
+      [class.highlighted-row]="highlightedElements.has(getIdentifier(element))"
+      (click)="toggleElement(element)"
+    ></mat-row>
+
+    <ng-template [ngIf]="footerData">
+      <mat-footer-row *matFooterRowDef="displayColumns"></mat-footer-row>
+    </ng-template>
+
+    <ng-template [ngIf]="mExpandable">
+      <mat-row *matRowDef="let row; columns: ['expandedDetail']" class="detail-row"></mat-row>
+    </ng-template>
+
+  </mat-table>
+
+  <ng-container *ngIf="hasPaginator">
+    <mat-paginator
+      [length]="totalElements"
+      [pageSize]="pageSize"
+      [pageIndex]="pageIndex"
+      [pageSizeOptions]="[5, 10, 20, 40]"
+      (page)="pageChanged($event)"
+    ></mat-paginator>
+  </ng-container>
+
+  <ng-template #noDataFound>
+    <mat-card>
+      <mat-card-content>
+        No data found
+      </mat-card-content>
+      <mat-card-footer *ngIf="canAdd">
+        <button mat-button color="primary" (click)="add.emit()">
+          <mat-icon>
+            add
+          </mat-icon>
+          Create
+        </button>
+      </mat-card-footer>
+    </mat-card>
+  </ng-template>
+</ng-template>
+
+
+<ng-template let-column="column" let-elementIndex="index" let-element="element" let-config="config" #cellTemplate>
+  <ng-container [ngSwitch]="(config[column] && config[column].type) || 'basic'">
+    <ng-container *ngSwitchCase="'basic'">
+      {{ display(element, column) }}
+    </ng-container>
+    <ng-container *ngSwitchCase="'value'">
+      {{ config[column].value(element) }}
+    </ng-container>
+    <ng-container *ngSwitchCase="'html'">
+      <div [innerHTML]="display(element, column) | sanitizeHtml"></div>
+    </ng-container>
+    <ng-container *ngSwitchCase="'checkbox'">
+      <mat-checkbox
+        [checked]="config[column].value(element)"
+        (change)="checkboxValueChanged(element, $event, column, elementIndex)"
+      >
+      </mat-checkbox>
+    </ng-container>
+    <ng-container *ngSwitchCase="'links'">
+      <div class="d-flex flex-column">
+        <ng-container *ngFor="let link of extract(column, element); let i = index">
+          <div>
+            <a [href]="config[column].href(link)" target="_blank">
+              {{ i + 1 }}.{{ config[column].text(link, i) }}
+            </a>
+          </div>
+        </ng-container>
+      </div>
+    </ng-container>
+    <ng-container *ngSwitchCase="'attachments'">
+      // some attachment component that receives server-sent data
+    </ng-container>
+  </ng-container>
+</ng-template>

@@ -1,0 +1,10 @@
+<ui-basic-table
+  [data]="items"
+  [columns]="columns"
+  [editableColumns]="true"
+  [canAdd]="true"
+  (add)="onAdd()"
+  (edit)="onEdit($event)"
+  (remove)="onRemove($event)"
+>
+</ui-basic-table>
